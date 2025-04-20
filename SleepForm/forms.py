@@ -1,15 +1,24 @@
-from django import forms
 
-class SleepForm(forms.Form):
-    bedtime = forms.TimeField(label='What time did you go to bed?')
-    wakeup_time = forms.TimeField(label='What time did you wake up?')
-    sleep_quality = forms.IntegerField(
-        label='Rate your sleep quality (1-10)',
-        min_value=1,
-        max_value=10
-    )
-    notes = forms.CharField(
-        label='Additional notes',
-        widget=forms.Textarea,
-        required=False
-    )
+from django import forms
+from .models import SleepQuestionnaire
+
+class SleepQuestionnaireForm(forms.ModelForm):
+    class Meta:
+        model = SleepQuestionnaire
+        fields = '__all__'
+        widgets = {
+            'bedtime': forms.TimeInput(attrs={'type': 'time'}),
+            'wakeup_time': forms.TimeInput(attrs={'type': 'time'}),
+            'time_to_sleep': forms.NumberInput(attrs={'min': 0}),
+            'sleep_hours': forms.NumberInput(attrs={'step': 0.5, 'min': 0, 'max': 24}),
+            'other_reason': forms.Textarea(attrs={'rows': 3}),
+            'partner_other_issues': forms.Textarea(attrs={'rows': 3}),
+        }
+    
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Make partner-related fields optional initially
+        for field in ['partner_snoring', 'partner_breathing_pauses', 
+                     'partner_leg_movements', 'partner_confusion',
+                     'partner_other_issues', 'partner_other_frequency']:
+            self.fields[field].required = False

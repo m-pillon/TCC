@@ -1,39 +1,18 @@
-from django.shortcuts import render, redirect
-from django.http import HttpResponse
-from django.views import generic
-from .forms import SleepForm  # Import your form class here
-from django.urls import reverse_lazy
+from django.shortcuts import get_object_or_404, render, redirect
+from SleepForm.models import SleepQuestionnaire
+from .forms import SleepQuestionnaireForm
 
-
-def index(request):
-    return HttpResponse("Hello, world. You're at the polls index.")
-
-def sleep_form_view(request):
+def sleep_questionnaire(request):
     if request.method == 'POST':
-        form = SleepForm(request.POST)
+        form = SleepQuestionnaireForm(request.POST)
         if form.is_valid():
-            # Process the form data
-            # Example: save to database if you have a model
-            # form.save()
-            form.save()
-            
-            # You can access cleaned data like:
-            # sleep_quality = form.cleaned_data['sleep_quality']
-            # bedtime = form.cleaned_data['bedtime']
-            
-            # Redirect to a success page or show a message
-            return render(request, 'SleepForm/success.html', {
-                'message': 'Thank you for submitting your sleep data!'
-            })
+            instance = form.save()
+            request.session['latest_questionnaire_id'] = instance.pk  # Store in session
+            return redirect('questionnaire_success')  # No PK needed
     else:
-        form = SleepForm()  # Create an empty form for GET requests
+        form = SleepQuestionnaireForm()
+    
+    return render(request, 'SleepForm/questionnaire.html', {'form': form})
 
-    return render(request, 'SleepForm/sleep_form.html', {
-        'form': form,
-        'title': 'Sleep Tracker Form'
-    })
-
-def success_view(request):
-    return render(request, 'SleepForm/success.html', {
-        'message': 'Your form was submitted successfully!'
-    })
+def questionnaire_success(request):
+    return render(request, 'SleepForm/success.html')

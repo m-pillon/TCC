@@ -1,0 +1,63 @@
+{% extends 'base.html' %}
+
+{% block content %}
+<h1>Questionário de Hábitos de Sono</h1>
+<p>As seguintes perguntas são relativas aos seus hábitos de sono durante o último mês somente.</p>
+
+<form method="post">
+    {% csrf_token %}
+    
+    <h2>Informações Básicas</h2>
+    <p>{{ form.bedtime.label_tag }} {{ form.bedtime }}</p>
+    <p>{{ form.time_to_sleep.label_tag }} {{ form.time_to_sleep }}</p>
+    <p>{{ form.wakeup_time.label_tag }} {{ form.wakeup_time }}</p>
+    <p>{{ form.sleep_hours.label_tag }} {{ form.sleep_hours }}</p>
+    
+    <h2>Dificuldades para Dormir</h2>
+    {% for field in form %}
+        {% if field.name in form.fields %}
+            {% if "difficulty_" in field.name or "bathroom_" in field.name or "breathing_" in field.name or "coughing_" in field.name or "felt_" in field.name or "bad_" in field.name or "pain" in field.name %}
+                <p>{{ field.label_tag }} {{ field }}</p>
+            {% endif %}
+        {% endif %}
+    {% endfor %}
+    
+    <p>{{ form.other_reason.label_tag }} {{ form.other_reason }}</p>
+    <p>{{ form.other_reason_frequency.label_tag }} {{ form.other_reason_frequency }}</p>
+    
+    <h2>Avaliação Geral do Sono</h2>
+    <p>{{ form.sleep_quality.label_tag }} {{ form.sleep_quality }}</p>
+    <p>{{ form.medication_use.label_tag }} {{ form.medication_use }}</p>
+    <p>{{ form.daytime_sleepiness.label_tag }} {{ form.daytime_sleepiness }}</p>
+    <p>{{ form.enthusiasm_difficulty.label_tag }} {{ form.enthusiasm_difficulty }}</p>
+    
+    <h2>Informações sobre Parceiro/Colega de Quarto</h2>
+    {{ form.has_partner.label_tag }} {{ form.has_partner }}
+    <div id="partner-fields">
+        <p>{{ form.partner_snoring.label_tag }} {{ form.partner_snoring }}</p>
+        <p>{{ form.partner_breathing_pauses.label_tag }} {{ form.partner_breathing_pauses }}</p>
+        <p>{{ form.partner_leg_movements.label_tag }} {{ form.partner_leg_movements }}</p>
+        <p>{{ form.partner_confusion.label_tag }} {{ form.partner_confusion }}</p>
+        <p>{{ form.partner_other_issues.label_tag }} {{ form.partner_other_issues }}</p>
+        <p>{{ form.partner_other_frequency.label_tag }} {{ form.partner_other_frequency }}</p>
+    </div>
+    
+    <button type="submit">Enviar Questionário</button>
+</form>
+
+<script>
+document.getElementById('id_has_partner').addEventListener('change', function() {
+    const partnerFields = document.getElementById('partner-fields');
+    if (this.value === '0') {
+        partnerFields.style.display = 'none';
+    } else {
+        partnerFields.style.display = 'block';
+    }
+});
+// Initialize visibility on page load
+document.addEventListener('DOMContentLoaded', function() {
+    const partnerFields = document.getElementById('partner-fields');
+    partnerFields.style.display = document.getElementById('id_has_partner').value === '0' ? 'none' : 'block';
+});
+</script>
+{% endblock %}
