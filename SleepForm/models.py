@@ -12,7 +12,6 @@ class SleepQuestionnaire(models.Model):
 
         @classmethod
         def get_value(cls, label):
-            """Return the integer value of a given choice label."""
             for value, name in cls.choices:
                 if name == label:
                     return value
@@ -26,7 +25,6 @@ class SleepQuestionnaire(models.Model):
 
         @classmethod
         def get_value(cls, label):
-            """Return the integer value of a given choice label."""
             for value, name in cls.choices:
                 if name == label:
                     return value
@@ -40,7 +38,6 @@ class SleepQuestionnaire(models.Model):
 
         @classmethod
         def get_value(cls, label):
-            """Return the integer value of a given choice label."""
             for value, name in cls.choices:
                 if name == label:
                     return value
@@ -54,7 +51,6 @@ class SleepQuestionnaire(models.Model):
 
         @classmethod
         def get_value(cls, label):
-            """Return the integer value of a given choice label."""
             for value, name in cls.choices:
                 if name == label:
                     return value
@@ -161,9 +157,131 @@ class SleepQuestionnaire(models.Model):
     )
     
     created_at = models.DateTimeField(auto_now_add=True)
+
+    
     
     def __str__(self):
         return f"Questionário de sono de {self.created_at.date()}"
             
+    def calculate_total_score(self):
+        """
+        Calculates the total score by summing all integer response values.
+        Handles null/blank fields appropriately.
+        """
+        score_fields = [
+            # Sleep difficulties (Frequency choices)
+            'difficulty_falling_asleep',
+            'difficulty_staying_asleep',
+            'bathroom_visits',
+            'breathing_difficulty',
+            'coughing_snoring',
+            'felt_cold',
+            'felt_hot',
+            'bad_dreams',
+            'pain',
+            'other_reason_frequency',
+            
+            # General evaluation
+            'medication_use',
+            'daytime_sleepiness',
+            
+            # Partner-related fields
+            'partner_snoring',
+            'partner_breathing_pauses',
+            'partner_leg_movements',
+            'partner_confusion',
+            'partner_other_frequency',
+        ]
+        
+        # Special fields that need inverse scoring (higher number = better)
+        inverse_score_fields = {
+            'sleep_quality': True,  # Very Good=4 is better than Very Bad=1
+            'enthusiasm_difficulty': False,
+            'has_partner': False,  # Partner status isn't really a score
+        }
+        
+        total = 0
+        
+        # Sum all regular score fields
+        for field in score_fields:
+            value = getattr(self, field)
+            if value is not None:
+                total += int(value)
+        
+        # Handle special fields
+        if self.sleep_quality is not None:
+            # Invert quality score (4=best becomes 1, 1=worst becomes 4)
+            total += (4 - int(self.sleep_quality) + 1)
+            
+        if self.enthusiasm_difficulty is not None:
+            # Count difficulty as-is (0=none, 3=severe)
+            total += int(self.enthusiasm_difficulty)
+        
+        return total
     
+    def get_score_interpretation(self):
+        """
+        Provides an interpretation of the total score
+        """
+        total = self.calculate_total_score()
+        
+        if total <= 15:
+            return "Good sleep health"
+        elif 15 < total <= 30:
+            return "Mild sleep disturbance"
+        elif 30 < total <= 45:
+            return "Moderate sleep disturbance"
+        else:
+            return "Severe sleep disturbance"
+    
+    def get_detailed_scores(self):
+        """
+        Returns a dictionary with component scores and total
+        """
+        return {
+            'sleep_difficulties': self._sum_difficulty_scores(),
+            'sleep_quality': self._get_quality_score(),
+            'daytime_impact': self._get_daytime_scores(),
+            'total': self.calculate_total_score(),
+            'interpretation': self.get_score_interpretation()
+        }
+    
+    def _sum_difficulty_scores(self):
+        """Helper method to sum all sleep difficulty scores"""
+        difficulty_fields = [
+            'difficulty_falling_asleep',
+            'difficulty_staying_asleep',
+            'bathroom_visits',
+            'breathing_difficulty',
+            'coughing_snoring',
+            'felt_cold',
+            'felt_hot',
+            'bad_dreams',
+            'pain',
+            'other_reason_frequency'
+        ]
+        return sum(
+            int(getattr(self, field)) 
+            for field in difficulty_fields 
+            if getattr(self, field) is not None
+        )
+    
+    def _get_quality_score(self):
+        """Helper method for sleep quality component"""
+        if self.sleep_quality is None:
+            return None
+        return (4 - int(self.sleep_quality) + 1)  # Inverted scoring
+    
+    def _get_daytime_scores(self):
+        """Helper method for daytime impact component"""
+        daytime_fields = [
+            'daytime_sleepiness',
+            'enthusiasm_difficulty',
+            'medication_use'
+        ]
+        return sum(
+            int(getattr(self, field))
+            for field in daytime_fields
+            if getattr(self, field) is not None
+        )
 
