@@ -57,12 +57,12 @@ class SleepQuestionnaire(models.Model):
             return None
 
     # Basic sleep information
-    bedtime = models.TimeField(verbose_name="Hora usual de deitar")
-    time_to_sleep = models.PositiveIntegerField(verbose_name="Minutos para dormir")
-    wakeup_time = models.TimeField(verbose_name="Hora usual de levantar")
-    sleep_hours = models.FloatField(verbose_name="Horas de sono por noite")
+    bedtime = models.TimeField(verbose_name="Hora usual de deitar") # Q1
+    time_to_sleep = models.PositiveIntegerField(verbose_name="Minutos para dormir") # Q2
+    wakeup_time = models.TimeField(verbose_name="Hora usual de levantar") # Q3
+    sleep_hours = models.FloatField(verbose_name="Horas de sono por noite") # Q4
     
-    # Sleep difficulties
+    # Sleep difficulties = Q5
     difficulty_falling_asleep = models.IntegerField(
         max_length=1, choices=Frequency.choices,
         verbose_name="Não conseguiu adormecer em até 30 minutos"
@@ -108,7 +108,7 @@ class SleepQuestionnaire(models.Model):
         verbose_name="Frequência da outra razão"
     )
     
-    # General sleep evaluation
+    # General sleep evaluation = Q6, Q7, Q8, Q9
     sleep_quality = models.IntegerField(
         max_length=1, choices=Quality.choices,
         verbose_name="Qualidade geral do sono"
@@ -156,96 +156,162 @@ class SleepQuestionnaire(models.Model):
         verbose_name="Frequência das outras alterações"
     )
     
-    created_at = models.DateTimeField(auto_now_add=True)
-
-    
+    created_at = models.DateTimeField(auto_now_add=True) 
     
     def __str__(self):
         return f"Questionário de sono de {self.created_at.date()}"
             
     def calculate_total_score(self):
         """
-        Calculates the total score by summing all integer response values.
-        Handles null/blank fields appropriately.
+        DURAT + DISTB + LATEN + DAYDYS + HSE + SLPQUAL + MEDS Minimum
+        Score = 0 (better); Maximum Score = 21 (worse) 
         """
-        score_fields = [
-            # Sleep difficulties (Frequency choices)
-            'difficulty_falling_asleep',
-            'difficulty_staying_asleep',
-            'bathroom_visits',
-            'breathing_difficulty',
-            'coughing_snoring',
-            'felt_cold',
-            'felt_hot',
-            'bad_dreams',
-            'pain',
-            'other_reason_frequency',
-            
-            # General evaluation
-            'medication_use',
-            'daytime_sleepiness',
-            
-            # Partner-related fields
-            'partner_snoring',
-            'partner_breathing_pauses',
-            'partner_leg_movements',
-            'partner_confusion',
-            'partner_other_frequency',
-        ]
-        
-        # Special fields that need inverse scoring (higher number = better)
-        inverse_score_fields = {
-            'sleep_quality': True,  # Very Good=4 is better than Very Bad=1
-            'enthusiasm_difficulty': False,
-            'has_partner': False,  # Partner status isn't really a score
-        }
-        
-        total = 0
-        
-        # Sum all regular score fields
-        for field in score_fields:
-            value = getattr(self, field)
-            if value is not None:
-                total += int(value)
-        
-        # Handle special fields
-        if self.sleep_quality is not None:
-            # Invert quality score (4=best becomes 1, 1=worst becomes 4)
-            total += (4 - int(self.sleep_quality) + 1)
-            
-        if self.enthusiasm_difficulty is not None:
-            # Count difficulty as-is (0=none, 3=severe)
-            total += int(self.enthusiasm_difficulty)
-        
+        duration_score = self._get_duration_score()
+        difficulty_score = self._get_difficulty_score()
+        latent_score = self._get_latent_score()
+        daytime_score = self._get_daytime_score()
+        sleep_efficiency_score = self._get_sleep_efficiency_score()
+        sleep_quality_score = int(getattr(self, "sleep_quality"))
+        medication_use_score = int(getattr(self, "medication_use"))
+
+        total = duration_score + difficulty_score + latent_score + daytime_score + sleep_efficiency_score + sleep_quality_score + medication_use_score
+
         return total
     
-    def get_score_interpretation(self):
+    def _get_duration_score(self):
         """
-        Provides an interpretation of the total score
+        IF Q4 > 7, THEN set value to 0
+        IF Q4 < 7 and > 6, THEN set value to 1
+        IF Q4 < 6 and > 5, THEN set value to 2
+        IF Q4 < 5, THEN set value to 3
+        Minimum Score = 0 (better); Maximum Score = 3 (worse) 
         """
-        total = self.calculate_total_score()
-        
-        if total <= 15:
-            return "Good sleep health"
-        elif 15 < total <= 30:
-            return "Mild sleep disturbance"
-        elif 30 < total <= 45:
-            return "Moderate sleep disturbance"
+        if float(self.sleep_hours) >= 7:
+            return 0
+        elif 6 < float(self.sleep_hours) < 7:
+            return 1
+        elif 5 < float(self.sleep_hours) <= 6:
+            return 2
         else:
-            return "Severe sleep disturbance"
+            return 3
     
-    def get_detailed_scores(self):
+    def _get_difficulty_score(self):
         """
-        Returns a dictionary with component scores and total
+        IF Q5COM = 0, THEN set value to 0
+        IF Q5COM > 1 and < 9, THEN set value to 1
+        IF Q5COM > 9 and < 18, THEN set value to 2
+        IF Q5COM > 18, THEN set value to 3
+        Minimum Score = 0 (better); Maximum Score = 3 (worse)
         """
-        return {
-            'sleep_difficulties': self._sum_difficulty_scores(),
-            'sleep_quality': self._get_quality_score(),
-            'daytime_impact': self._get_daytime_scores(),
-            'total': self.calculate_total_score(),
-            'interpretation': self.get_score_interpretation()
-        }
-    
+        difficulty_score = self._sum_difficulty_scores()
+        
+        if difficulty_score == 0:
+            return 0
+        elif 0 < difficulty_score < 9:
+            return 1
+        elif 9 <= difficulty_score < 18:
+            return 2
+        else:
+            return 3
+
+    def _get_new_latent_score(self):
+        """
+        First, recode Q2 into Q2new thusly:
+        IF Q2 > 0 and < 15, THEN set value of Q2new to 0
+        IF Q2 > 15 and < 30, THEN set value of Q2new to 1
+        IF Q2 > 30 and < 60, THEN set value of Q2new to 2
+        IF Q2 > 60, THEN set value of Q2new to 3 
+        """
+        if self.time_to_sleep is None:
+            return None
+        
+        if 0 < self.time_to_sleep < 15:
+            return 0
+        elif 15 <= self.time_to_sleep < 30:
+            return 1
+        elif 30 <= self.time_to_sleep < 60:
+            return 2
+        else:
+            return 3
+        
+    def _get_latent_score(self):
+        """
+        Next
+        IF Q5a + Q2new = 0, THEN set value to 0
+        IF Q5a + Q2new >= 1 and <= 2, THEN set value to 1
+        IF Q5a + Q2new >= 3 and <= 4, THEN set value to 2
+        IF Q5a + Q2new >= 5 and <= 6, THEN set value to 3
+        Minimum Score = 0 (better); Maximum Score = 3 (worse) 
+        """
+        if int(getattr(self, "difficulty_falling_asleep")) + self._get_new_latent_score() == 0:
+            return 0
+        elif 1 <= (int(getattr(self, "difficulty_falling_asleep")) + self._get_new_latent_score()) <= 2:
+            return 1
+        elif 3 <= (int(getattr(self, "difficulty_falling_asleep")) + self._get_new_latent_score()) <= 4:
+            return 2
+        else:
+            return 3
+
+    def _get_daytime_score(self):
+        """
+        IF Q8 + Q9 = 0, THEN set value to 0
+        IF Q8 + Q9 > 1 and < 2, THEN set value to 1
+        IF Q8 + Q9 > 3 and < 4, THEN set value to 2
+        IF Q8 + Q9 > 5 and < 6, THEN set value to 3
+        Minimum Score = 0 (better); Maximum Score = 3 (worse)
+        """
+        daytime_score = self._sum_daytime_scores()
+        
+        if daytime_score == 0:
+            return 0
+        elif 1 <= daytime_score <= 2:
+            return 1
+        elif 3 <= daytime_score <= 4:
+            return 2
+        else:
+            return 3
+
+    def _get_sleep_efficiency_score(self):
+        """
+        Diffsec = Diffsec = Difference in seconds between times for Bed Time (Q1) and
+        Getting Up Time (Q3).
+        Diffhour = Absolute value of diffsec / 3600
+        newtib =IF diffhour > 24, then newtib = diffhour – 24
+        IF diffhour < 24, THEN newtib = diffhour
+        (NOTE, THE ABOVE JUST CALCULATES THE HOURS BETWEEN BED
+        TIME (Q1) AND GETTING UP TIME (Q3)
+        tmphse = (Q4 / newtib) * 100
+        IF tmphse > 85, THEN set value to 0
+        IF tmphse < 85 and > 75, THEN set value to 1
+        IF tmphse < 75 and > 65, THEN set value to 2
+        IF tmphse < 65, THEN set value to 3
+        Minimum Score = 0 (better); Maximum Score = 3 (worse) 
+        """
+        if self.bedtime is None or self.wakeup_time is None:
+            return None
+        
+        # Calculate the difference in seconds between bedtime and wakeup time
+        diffsec = (datetime.combine(datetime.today(), self.wakeup_time) - 
+                   datetime.combine(datetime.today(), self.bedtime)).total_seconds()
+        
+        # Calculate the absolute value of diffsec in hours
+        diffhour = abs(diffsec) / 3600
+
+        # Adjust for overnight sleep
+        newtib = diffhour - 24 if diffhour > 24 else diffhour
+        
+        # Calculate sleep efficiency
+        tmphse = (self.sleep_hours / newtib) * 100
+        
+        if tmphse >= 85:
+            return 0
+        elif 75 <= tmphse < 85:
+            return 1
+        elif 65 <= tmphse < 75:
+            return 2
+        else:
+            return 3
+
     def _sum_difficulty_scores(self):
         """Helper method to sum all sleep difficulty scores"""
         difficulty_fields = [
@@ -272,12 +338,11 @@ class SleepQuestionnaire(models.Model):
             return None
         return (4 - int(self.sleep_quality) + 1)  # Inverted scoring
     
-    def _get_daytime_scores(self):
+    def _sum_daytime_scores(self):
         """Helper method for daytime impact component"""
         daytime_fields = [
             'daytime_sleepiness',
-            'enthusiasm_difficulty',
-            'medication_use'
+            'enthusiasm_difficulty'
         ]
         return sum(
             int(getattr(self, field))
